@@ -47,6 +47,7 @@
     function add_span(questions = '', verified = '') {
         const topic = document.querySelector('div.user-summary__desc span.user-summary__nickname');
         const span = document.createElement('span');
+        span.title = 'всего вопросов / решённых';
         span.textContent = `${questions} / ${verified}`;
         span.style.marginLeft = '5px';
         span.style.background = 'none';
