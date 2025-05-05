@@ -3,11 +3,13 @@
 // @author       dim5x
 // @icon         https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/silent_user_icon_64x64.ico
 // @namespace    http://tampermonkey.net/
-// @version      1.8
+// @version      1.9
 // @description  Подсветка ника топик-стартера по кнопке, если он регулярно не даёт обратную связь по вопросам.
 // @match        *://qna.habr.com/q/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_listValues
+// @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
 // @connect      qna.habr.com
 // @homepageURL  https://github.com/dim5x/qna_highlighter/tree/master
@@ -17,18 +19,18 @@
 // ==/UserScript==
 
 
-(function() {
+(function () {
     'use strict';
-    console.log('[DEBUG] Скрипт запущен');
+    console.log('[DEBUG] Скрипт запущен!');
     let users = GM_getValue('highlightedUsers', []);
     // 1. Находим ник автора темы и поле для ответа.
     const topic_starter_nick = document.querySelector('div.user-summary__desc span.user-summary__nickname').textContent.trim();
     const answer = document.querySelector('#answer-form');
 
-    console.log(`[DEBUG] ник автора темы: "${topic_starter_nick}"`);
-    console.log('[DEBUG] Хранилище:', users);
+    console.log(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
+    console.log('[DEBUG] Хранилище ников:', users);
 
-    // Ищем все элементы, которые могут содержать ники (настраивайте под сайт)
+    // Ищем все элементы, которые могут содержать ники (настраивайте под сайт).
     function highlight_usernames() {
         const elements = document.querySelectorAll('span.user-summary__nickname');
         elements.forEach(el => {
@@ -36,13 +38,13 @@
             if (users.includes(username)) {
                 el.style.color = 'red';
                 el.style.fontWeight = 'bold';
-                answer.hidden = true; // Прячем, если ник в списке.
+                answer.hidden = true; // Прячем поле ответа, если ник в списке.
             }
         });
     }
 
-    // Добавляем span cо статистикой рядом с ником.
-    function add_span(questions='', verified='') {
+    // Добавляем span со статистикой рядом с ником.
+    function add_span(questions = '', verified = '') {
         const topic = document.querySelector('div.user-summary__desc span.user-summary__nickname');
         const span = document.createElement('span');
         span.textContent = `${questions} / ${verified}`;
@@ -64,18 +66,19 @@
         button.style.background = 'none';
         button.style.border = 'none';
         button.style.cursor = 'pointer';
-        button.style.color = '#999';
+        // button.style.color = '#999';
+        button.style.color = '#9099A3';
 
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             if (users.includes(topic_starter_nick)) {
                 users = users.filter(user => user !== topic_starter_nick);// Удаляем из списка
-                console.log('users поссле удаления:', users);
+                console.log(`[DEBUG] Удаляем из списка ${topic_starter_nick}. Список после удаления:`, users);
                 topicStarterNick.style.color = '#9099A3'; // Сбрасываем подсветку
                 answer.hidden = false; // Современный способ // Восстанавливает исходное значение
             } else {
-                users.push(topic_starter_nick); // Добавляем
-                console.log('users поссле лобавления:', users);
+                users.push(topic_starter_nick); // Добавляем ник в список.
+                console.log(`[DEBUG] Добавили  ${topic_starter_nick}. Список после добавления:`, users);
                 highlight_usernames();
             }
             GM_setValue('highlightedUsers', users);
@@ -87,71 +90,138 @@
 
     function analyze_habr_profile(username) {
         return new Promise((resolve, reject) => {
-            // Удаляем @ из ника, если он есть
             username = username.startsWith('@') ? username.slice(1) : username;
-            const profileUrl = `https://qna.habr.com/user/${username}/questions`;
 
-            console.log(`[Habr Analyzer] Загружаем профиль: ${profileUrl}`);
+            // Конфигурация кэширования
+            const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
+            const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
+            const cacheKey = `habr_profile_cache_${username}`;
 
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: profileUrl,
-                onload: function(response) {
-                    if (response.status !== 200) {
-                        const error = new Error(`Ошибка загрузки: ${response.status}`);
-                        console.error(`[Habr Analyzer]`, error.message);
-                        reject(error);
-                        return;
-                    }
+            // Проверка кэша
+            const cachedData = GM_getValue(cacheKey);
+            console.log('[DEBUG] cachedData:', cachedData);
+            if (cachedData && Date.now() - cachedData.data.timestamp < CACHE_TTL) {
+                console.log(`[Cache] Используем кэшированные данные для ${username}`);
 
-                    try {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(response.responseText, "text/html");
+                resolve({
+                    questions: cachedData.data.estimatedQuestionCount,
+                    verified: cachedData.data.verified
+                });
+                return;
+            }
 
-                        // 1. Получаем количество вопросов
-                        const counterElement = doc.querySelector('a.mini-counter div.mini-counter__count');
-                        const questionCount = counterElement ? counterElement.textContent.trim() : '0';
+            //let allQuestions = 0;
+            let allVerified = 0;
+            let currentPage = 1;
+            let totalPages = 1;
+            let questionCount = 0;
 
-                        // 2. Считаем проверенные ответы
-                        const verifiedAnswersCount = doc.querySelectorAll('svg.icon_svg.icon_check').length;
+            function fetchPage(page) {
+                const profileUrl = `https://qna.habr.com/user/${username}/questions?page=${page}`;
 
-                        console.log(`[Habr Analyzer] Статистика для ${username}:`, {
-                            questions: questionCount,
-                            verified: verifiedAnswersCount
-                        });
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: profileUrl,
+                    onload: function (response) {
+                        if (response.status !== 200) {
+                            reject(new Error(`Ошибка загрузки страницы ${page}: ${response.status}`));
+                            return;
+                        }
 
-                        resolve({
-                            questions: questionCount,
-                            verified: verifiedAnswersCount
-                        });
+                        try {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(response.responseText, "text/html");
 
-                    } catch (parseError) {
-                        console.error('[Habr Analyzer] Ошибка парсинга:', parseError);
-                        reject(parseError);
-                    }
-                },
-                onerror: function(error) {
-                    console.error('[Habr Analyzer] Ошибка запроса:', error);
-                    reject(error);
-                }
-            });
+                            if (page === 1) {
+                                const countElement = doc.querySelector('a.mini-counter div.mini-counter__count');
+                                questionCount = countElement ? parseInt(countElement.textContent.trim()) : 0;
+                                totalPages = Math.ceil(questionCount / 20);
+                            }
+
+                            // Обработка текущей страницы
+                            // const questions = doc.querySelectorAll('.question__title-link');
+                            const verified = doc.querySelectorAll('svg.icon_svg.icon_check').length;
+                            allVerified += verified;
+
+                            // Проверка продолжения
+                            const shouldContinue = () => {
+                                const hasNextPage = doc.querySelector('.paginator__item:last-child:not(.paginator__item_current)');
+                                const withinCalculatedLimit = page < totalPages;
+                                const safetyLimit = page < 50;
+                                return (hasNextPage && withinCalculatedLimit && safetyLimit);
+                            };
+
+                            if (shouldContinue()) {
+                                currentPage++;
+                                fetchPage(currentPage);
+                            } else {
+                                const result = {
+                                    //questions: allQuestions.toString(),
+                                    estimatedQuestionCount: questionCount,
+                                    verified: allVerified,
+                                    pages: currentPage,
+                                    timestamp: Date.now()
+                                };
+
+                                // Кэшируем только если вопросов больше порога
+                                if (questionCount > CACHE_THRESHOLD) {
+                                    GM_setValue(cacheKey, {
+                                        data: result,
+                                        //timestamp: Date.now()
+                                    });
+                                    console.log(`[Cache] Данные сохранены в кэш для ${username}`);
+                                } else {
+                                    GM_deleteValue(cacheKey); // Удаляем старые данные если они есть
+                                }
+
+                                //resolve(result);
+                                resolve({
+                                    questions: questionCount,
+                                    verified: allVerified
+                                });
+                            }
+                        } catch (error) {
+                            reject(error);
+                        }
+                    },
+                    onerror: reject
+                });
+            }
+
+            fetchPage(1);
         });
     }
 
+    // Функция для очистки устаревшего кэша.
+    function clear_old_cache() {
+        const allKeys = GM_listValues();
+        const now = Date.now();
+        const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня.
+        //const CACHE_TTL = 60 * 1000;
 
-    function clearStorage(){
-        users = [];
-        GM_setValue('highlightedUsers', users);
+        allKeys.forEach(key => {
+            if (key.startsWith('habr_profile_cache_')) {
+                const data = GM_getValue(key);
+                if (now - data.timestamp > CACHE_TTL) {
+                    GM_deleteValue(key);
+                }
+            }
+        });
     }
 
-    //clearStorage()
+    // Для полной очистки storage.
+    // function clear_storage(){
+    //     users = [];
+    //     GM_setValue('highlightedUsers', users);
+    // }
+    //clear_storage()
 
     async function init() {
-        const { questions, verified } = await analyze_habr_profile(topic_starter_nick);
-        console.log('questions, verified', questions, verified);
+        const {questions, verified} = await analyze_habr_profile(topic_starter_nick);
         add_span(questions, verified);
         highlight_usernames();
         add_button_to_topic_starter();
+        clear_old_cache(); // Очищаем кэш при запуске скрипта.
     }
 
     init().catch(console.error);
