@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name         Подсветка ника топик-стартера на qna.habr.com
 // @author       dim5x
+// @icon         https://github.com/dim5x/qna_highlighter/blob/master/silent_user_icon_64x64.ico
 // @namespace    http://tampermonkey.net/
 // @version      1.7
 // @description  Подсветка ника топик-стартера по кнопке, если он регулярно не даёт обратную связь по вопросам.
@@ -9,6 +10,10 @@
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
 // @connect      qna.habr.com
+// @homepageURL  https://github.com/dim5x/qna_highlighter/tree/master
+// @updateURL    https://github.com/dim5x/qna_highlighter/blob/master/highlighter.js
+// @downloadURL  https://github.com/dim5x/qna_highlighter/blob/master/highlighter.js
+// @supportURL   https://github.com/dim5x/qna_highlighter/issues
 // ==/UserScript==
 
 
