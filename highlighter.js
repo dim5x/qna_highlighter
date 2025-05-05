@@ -3,7 +3,7 @@
 // @author       dim5x
 // @icon         https://github.com/dim5x/qna_highlighter/blob/master/silent_user_icon_64x64.ico
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      1.8
 // @description  Подсветка ника топик-стартера по кнопке, если он регулярно не даёт обратную связь по вопросам.
 // @match        *://qna.habr.com/q/*
 // @grant        GM_setValue
