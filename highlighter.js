@@ -3,9 +3,9 @@
 // @author       dim5x
 // @icon         https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/w_silent_user_icon_64x64_inverted.ico
 // @namespace    http://tampermonkey.net/
-// @version      1.9
+// @version      2.1
 // @description  Подсветка ника топик-стартера по кнопке, если он регулярно не даёт обратную связь по вопросам.
-// @match        *://qna.habr.com/q/*
+// @match        https://qna.habr.com/q/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_listValues
@@ -23,9 +23,15 @@
     'use strict';
     console.log('[DEBUG] Скрипт запущен!');
     let users = GM_getValue('highlightedUsers', []);
+
     // 1. Находим ник автора темы и поле для ответа.
     const topic_starter_nick = document.querySelector('div.user-summary__desc span.user-summary__nickname').textContent.trim();
     const answer = document.querySelector('#answer-form');
+
+    // Конфигурация кэширования
+    const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
+    const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
+    const cacheKey = `habr_profile_cache_${topic_starter_nick.slice(1)}`;
 
     console.log(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
     console.log('[DEBUG] Хранилище ников:', users);
@@ -44,11 +50,11 @@
     }
 
     // Добавляем span со статистикой рядом с ником.
-    function add_span(questions = '', verified = '') {
+    function add_span(questions = 0, verified = 0, without_answer = 0) {
         const topic = document.querySelector('div.user-summary__desc span.user-summary__nickname');
         const span = document.createElement('span');
-        span.title = 'всего вопросов / решённых';
-        span.textContent = `${questions} / ${verified}`;
+        span.title = `всего задал вопросов  / вопросов без ответа / отмечено решёнными ${parseInt(verified / questions * 100)}%`;
+        span.textContent = `${questions} / ${without_answer} / ${verified}`;
         span.style.marginLeft = '5px';
         span.style.background = 'none';
         span.style.border = 'none';
@@ -58,8 +64,8 @@
 
     // Добавляем кнопку "➕" рядом с ником.
     function add_button_to_topic_starter() {
-        const topicStarterNick = document.querySelector('div.user-summary__desc span.user-summary__nickname');
-        topicStarterNick.dataset.hasButton = 'true';
+        const topic_starter_nick_div = document.querySelector('div.user-summary__desc span.user-summary__nickname');
+        topic_starter_nick_div.dataset.hasButton = 'true';
 
         const button = document.createElement('button');
         button.textContent = '➕';
@@ -67,7 +73,6 @@
         button.style.background = 'none';
         button.style.border = 'none';
         button.style.cursor = 'pointer';
-        // button.style.color = '#999';
         button.style.color = '#9099A3';
 
         button.addEventListener('click', (e) => {
@@ -75,7 +80,7 @@
             if (users.includes(topic_starter_nick)) {
                 users = users.filter(user => user !== topic_starter_nick);// Удаляем из списка
                 console.log(`[DEBUG] Удаляем из списка ${topic_starter_nick}. Список после удаления:`, users);
-                topicStarterNick.style.color = '#9099A3'; // Сбрасываем подсветку
+                topic_starter_nick_div.style.color = '#9099A3'; // Сбрасываем подсветку
                 answer.hidden = false; // Современный способ // Восстанавливает исходное значение
             } else {
                 users.push(topic_starter_nick); // Добавляем ник в список.
@@ -85,18 +90,13 @@
             GM_setValue('highlightedUsers', users);
         });
 
-        topicStarterNick.appendChild(button);
+        topic_starter_nick_div.appendChild(button);
     }
 
-
+    // Анализируем профиль пользователя:
     function analyze_habr_profile(username) {
         return new Promise((resolve, reject) => {
             username = username.startsWith('@') ? username.slice(1) : username;
-
-            // Конфигурация кэширования
-            const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
-            const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
-            const cacheKey = `habr_profile_cache_${username}`;
 
             // Проверка кэша
             const cachedData = GM_getValue(cacheKey);
@@ -106,16 +106,17 @@
 
                 resolve({
                     questions: cachedData.data.estimatedQuestionCount,
-                    verified: cachedData.data.verified
+                    verified: cachedData.data.verified,
+                    without_answer: cachedData.data.without_answer
                 });
                 return;
             }
 
-            //let allQuestions = 0;
-            let allVerified = 0;
-            let currentPage = 1;
-            let totalPages = 1;
-            let questionCount = 0;
+            let without_answer = 0;
+            let all_verified = 0;
+            let current_page = 1;
+            let total_pages = 1;
+            let question_count = 0;
 
             function fetchPage(page) {
                 const profileUrl = `https://qna.habr.com/user/${username}/questions?page=${page}`;
@@ -133,42 +134,53 @@
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(response.responseText, "text/html");
 
+                            // a.mini-counter div.mini-counter__count - селектор для общего количества вопросов.
                             if (page === 1) {
                                 const countElement = doc.querySelector('a.mini-counter div.mini-counter__count');
-                                questionCount = countElement ? parseInt(countElement.textContent.trim()) : 0;
-                                totalPages = Math.ceil(questionCount / 20);
+                                question_count = countElement ? parseInt(countElement.textContent.trim()) : 0;
+                                total_pages = Math.ceil(question_count / 20);
                             }
 
                             // Обработка текущей страницы
-                            // const questions = doc.querySelectorAll('.question__title-link');
+                            // div.mini-counter__count.mini-counter__count_grey - селектор для количества ответов.
+                            const q = doc.querySelectorAll('div.mini-counter__count.mini-counter__count_grey');
+                            console.log('q', q);
+                            q.forEach(key => {
+                                if (key.textContent.trim() === "0") {
+                                    without_answer += 1
+                                }
+                                console.log(key.textContent.trim())
+                            });
+
+                            // svg.icon_svg.icon_check - селектор для решённых вопросов.
                             const verified = doc.querySelectorAll('svg.icon_svg.icon_check').length;
-                            allVerified += verified;
+                            all_verified += verified;
 
                             // Проверка продолжения
                             const shouldContinue = () => {
                                 const hasNextPage = doc.querySelector('.paginator__item:last-child:not(.paginator__item_current)');
-                                const withinCalculatedLimit = page < totalPages;
+                                const withinCalculatedLimit = page < total_pages;
                                 const safetyLimit = page < 50;
                                 return (hasNextPage && withinCalculatedLimit && safetyLimit);
                             };
 
                             if (shouldContinue()) {
-                                currentPage++;
-                                fetchPage(currentPage);
+                                current_page++;
+                                fetchPage(current_page);
                             } else {
                                 const result = {
-                                    //questions: allQuestions.toString(),
-                                    estimatedQuestionCount: questionCount,
-                                    verified: allVerified,
-                                    pages: currentPage,
+                                    estimatedQuestionCount: question_count,
+                                    verified: all_verified,
+                                    without_answer: without_answer,
+                                    pages: current_page,
                                     timestamp: Date.now()
                                 };
 
                                 // Кэшируем только если вопросов больше порога
-                                if (questionCount > CACHE_THRESHOLD) {
+                                if (question_count > CACHE_THRESHOLD) {
                                     GM_setValue(cacheKey, {
                                         data: result,
-                                        //timestamp: Date.now()
+
                                     });
                                     console.log(`[Cache] Данные сохранены в кэш для ${username}`);
                                 } else {
@@ -176,9 +188,11 @@
                                 }
 
                                 //resolve(result);
+                                console.log('without_answer', without_answer);
                                 resolve({
-                                    questions: questionCount,
-                                    verified: allVerified
+                                    questions: question_count,
+                                    verified: all_verified,
+                                    without_answer: without_answer
                                 });
                             }
                         } catch (error) {
@@ -188,7 +202,6 @@
                     onerror: reject
                 });
             }
-
             fetchPage(1);
         });
     }
@@ -197,8 +210,7 @@
     function clear_old_cache() {
         const allKeys = GM_listValues();
         const now = Date.now();
-        const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня.
-        //const CACHE_TTL = 60 * 1000;
+        //const CACHE_TTL = 60 * 1000; // Раскомментировать для очистки немедленно.
 
         allKeys.forEach(key => {
             if (key.startsWith('habr_profile_cache_')) {
@@ -218,14 +230,13 @@
     //clear_storage()
 
     async function init() {
-        const {questions, verified} = await analyze_habr_profile(topic_starter_nick);
-        add_span(questions, verified);
+        const {questions, verified, without_answer} = await analyze_habr_profile(topic_starter_nick);
+        add_span(questions, verified, without_answer);
         highlight_usernames();
         add_button_to_topic_starter();
         clear_old_cache(); // Очищаем кэш при запуске скрипта.
     }
 
     init().catch(console.error);
-
 
 })();
