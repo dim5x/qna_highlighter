@@ -100,7 +100,7 @@
 
             // Проверка кэша
             const cachedData = GM_getValue(cacheKey);
-            console.log('[DEBUG] cachedData:', cachedData);
+            //console.log('[DEBUG] cachedData:', cachedData);
             if (cachedData && Date.now() - cachedData.data.timestamp < CACHE_TTL) {
                 console.log(`[Cache] Используем кэшированные данные для ${username}`);
 
@@ -144,12 +144,10 @@
                             // Обработка текущей страницы
                             // div.mini-counter__count.mini-counter__count_grey - селектор для количества ответов.
                             const q = doc.querySelectorAll('div.mini-counter__count.mini-counter__count_grey');
-                            console.log('q', q);
                             q.forEach(key => {
                                 if (key.textContent.trim() === "0") {
                                     without_answer += 1
                                 }
-                                console.log(key.textContent.trim())
                             });
 
                             // svg.icon_svg.icon_check - селектор для решённых вопросов.
@@ -188,7 +186,6 @@
                                 }
 
                                 //resolve(result);
-                                console.log('without_answer', without_answer);
                                 resolve({
                                     questions: question_count,
                                     verified: all_verified,
