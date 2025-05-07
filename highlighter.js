@@ -18,7 +18,6 @@
 // @supportURL   https://github.com/dim5x/qna_highlighter/issues
 // ==/UserScript==
 
-
 (function () {
     'use strict';
 
@@ -57,15 +56,28 @@
     function add_span(questions = 0, verified = 0, without_answer = 0) {
         const topic = document.querySelector('div.user-summary__desc span.user-summary__nickname');
         const span = document.createElement('span');
-        const procent = parseInt(`${verified / questions * 100}`);
+        const procent = parseInt(`${verified / (questions - without_answer) * 100}`) || 0;
+        let color = '#999';
 
-        span.title = `всего задал вопросов  / вопросов без ответа / отмечено решёнными ${parseInt(verified / questions * 100)}%`;
+        if (questions > 3){
+            switch (true) {
+                case procent >= 50:
+                    color = "green"; break;
+                case procent > 25 && procent < 50:
+                    color = "orange"; break;
+                case procent >= 0 && procent <= 25:
+                    color = "red"; break;
+            }
+        }
+
+        span.title = `всего задал вопросов  / вопросов без ответа / из имеющих ответ отмечено решёнными ${procent}%`;
         span.textContent = `${questions} / ${without_answer} / ${verified}`;
         span.style.marginLeft = '5px';
         span.style.background = 'none';
         span.style.border = 'none';
         span.style.cursor = 'pointer';
-        span.style.color = '#999';
+        span.style.color = color;
+        span.style.fontWeight = 'bold';
         topic.appendChild(span);
     }
 
