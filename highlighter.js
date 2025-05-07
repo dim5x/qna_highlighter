@@ -30,7 +30,7 @@
 
     // Конфигурация кэширования
     const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
-    const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
+    const CACHE_THRESHOLD = 20; // Минимальное количество вопросов для кэширования
     const cacheKey = `habr_profile_cache_${topic_starter_nick.slice(1)}`;
 
     console.log(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
@@ -58,6 +58,7 @@
         span.style.marginLeft = '5px';
         span.style.background = 'none';
         span.style.border = 'none';
+        span.style.cursor = 'pointer';
         span.style.color = '#999';
         topic.appendChild(span);
     }
@@ -199,6 +200,7 @@
                     onerror: reject
                 });
             }
+
             fetchPage(1);
         });
     }
