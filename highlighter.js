@@ -21,7 +21,11 @@
 
 (function () {
     'use strict';
-    console.log('[DEBUG] Скрипт запущен!');
+
+    // Custom print function.
+    function print(...args) {console.log(...args)}
+
+    print('[DEBUG] Скрипт запущен!');
     let users = GM_getValue('highlightedUsers', []);
 
     // 1. Находим ник автора темы и поле для ответа.
@@ -30,11 +34,11 @@
 
     // Конфигурация кэширования
     const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
-    const CACHE_THRESHOLD = 20; // Минимальное количество вопросов для кэширования
+    const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
     const cacheKey = `habr_profile_cache_${topic_starter_nick.slice(1)}`;
 
-    console.log(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
-    console.log('[DEBUG] Хранилище ников:', users);
+    print(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
+    print('[DEBUG] Хранилище ников:', users);
 
     // Ищем все элементы, которые могут содержать ники (настраивайте под сайт).
     function highlight_usernames() {
@@ -53,6 +57,8 @@
     function add_span(questions = 0, verified = 0, without_answer = 0) {
         const topic = document.querySelector('div.user-summary__desc span.user-summary__nickname');
         const span = document.createElement('span');
+        const procent = parseInt(`${verified / questions * 100}`);
+
         span.title = `всего задал вопросов  / вопросов без ответа / отмечено решёнными ${parseInt(verified / questions * 100)}%`;
         span.textContent = `${questions} / ${without_answer} / ${verified}`;
         span.style.marginLeft = '5px';
@@ -80,12 +86,12 @@
             e.stopPropagation();
             if (users.includes(topic_starter_nick)) {
                 users = users.filter(user => user !== topic_starter_nick);// Удаляем из списка
-                console.log(`[DEBUG] Удаляем из списка ${topic_starter_nick}. Список после удаления:`, users);
+                print(`[DEBUG] Удаляем из списка ${topic_starter_nick}. Список после удаления:`, users);
                 topic_starter_nick_div.style.color = '#9099A3'; // Сбрасываем подсветку
                 answer.hidden = false; // Современный способ // Восстанавливает исходное значение
             } else {
                 users.push(topic_starter_nick); // Добавляем ник в список.
-                console.log(`[DEBUG] Добавили  ${topic_starter_nick}. Список после добавления:`, users);
+                print(`[DEBUG] Добавили  ${topic_starter_nick}. Список после добавления:`, users);
                 highlight_usernames();
             }
             GM_setValue('highlightedUsers', users);
@@ -101,9 +107,9 @@
 
             // Проверка кэша
             const cachedData = GM_getValue(cacheKey);
-            //console.log('[DEBUG] cachedData:', cachedData);
+            //print('[DEBUG] cachedData:', cachedData);
             if (cachedData && Date.now() - cachedData.data.timestamp < CACHE_TTL) {
-                console.log(`[Cache] Используем кэшированные данные для ${username}`);
+                print(`[Cache] Используем кэшированные данные для ${username}`);
 
                 resolve({
                     questions: cachedData.data.estimatedQuestionCount,
@@ -181,7 +187,7 @@
                                         data: result,
 
                                     });
-                                    console.log(`[Cache] Данные сохранены в кэш для ${username}`);
+                                    print(`[Cache] Данные сохранены в кэш для ${username}`);
                                 } else {
                                     GM_deleteValue(cacheKey); // Удаляем старые данные если они есть
                                 }
@@ -200,7 +206,6 @@
                     onerror: reject
                 });
             }
-
             fetchPage(1);
         });
     }
