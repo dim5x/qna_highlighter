@@ -33,7 +33,7 @@
 
     // Конфигурация кэширования
     const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 дня в миллисекундах
-    const CACHE_THRESHOLD = 50; // Минимальное количество вопросов для кэширования
+    const CACHE_THRESHOLD = 20; // Минимальное количество вопросов для кэширования
     const cacheKey = `habr_profile_cache_${topic_starter_nick.slice(1)}`;
 
     print(`[DEBUG] Ник автора темы: "${topic_starter_nick}"`);
