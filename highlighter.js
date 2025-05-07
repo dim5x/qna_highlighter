@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Подсветка ника топик-стартера на qna.habr.com
 // @author       dim5x
-// @icon         https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/w_silent_user_icon_64x64_inverted.ico
+// @icon         https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/icon.png
 // @namespace    http://tampermonkey.net/
 // @version      2.1
 // @description  Подсветка ника топик-стартера по кнопке, если он регулярно не даёт обратную связь по вопросам.
