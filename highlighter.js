@@ -12,7 +12,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
 // @connect      qna.habr.com
-// @homepageURL  https://github.com/dim5x/qna_highlighter/tree/master
+// @homepageURL  https://github.com/dim5x/qna_highlighter
 // @updateURL    https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/highlighter.js
 // @downloadURL  https://raw.githubusercontent.com/dim5x/qna_highlighter/refs/heads/master/highlighter.js
 // @supportURL   https://github.com/dim5x/qna_highlighter/issues
