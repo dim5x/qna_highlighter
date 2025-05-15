@@ -42,7 +42,8 @@
     // Ищем все элементы, которые могут содержать ники (настраивайте под сайт).
     function highlight_usernames() {
         const elements = document.querySelectorAll('span.user-summary__nickname');
-        elements.forEach(el => {
+        const uniqueElements = new Set(elements); // Автоматически удаляет дубликаты
+        uniqueElements.forEach(el => {
             const username = el.textContent.trim().split(/\s+/)[0];
             if (users.includes(username)) {
                 el.style.color = 'red';
